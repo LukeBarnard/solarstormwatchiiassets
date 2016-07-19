@@ -1,0 +1,4 @@
+data,C:\Users\Luke\PycharmProjects\SolarStormwatchIIAssets\data
+code,C:\Users\Luke\PycharmProjects\SolarStormwatchIIAssets\code
+figs,C:\Users\Luke\PycharmProjects\SolarStormwatchIIAssets\figures
+out_data,C:\Users\Luke\PycharmProjects\SolarStormwatchIIAssets\out_data
