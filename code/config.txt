@@ -1,4 +1,6 @@
-data,C:\Users\Luke\PycharmProjects\SolarStormwatchIIAssets\data
 code,C:\Users\Luke\PycharmProjects\SolarStormwatchIIAssets\code
 figs,C:\Users\Luke\PycharmProjects\SolarStormwatchIIAssets\figures
+data,C:\Users\Luke\PycharmProjects\SolarStormwatchIIAssets\data
+swpc_data,C:\Users\Luke\PycharmProjects\SolarStormwatchIIAssets\data\enlil_cme_analysis_single_events.xlsx
+hi_data,E:\STEREO\ares.nrl.navy.mil\lz
 out_data,C:\Users\Luke\PycharmProjects\SolarStormwatchIIAssets\out_data
