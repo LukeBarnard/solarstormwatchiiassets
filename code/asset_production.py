@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import asset_production_tools as apt
 import hi_processing as hip
+import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
 
 def load_swpc_events():
     """
@@ -35,18 +37,19 @@ def make_output_directory_structure():
     # Loop over each event, and create a directory in outdata with a unique event name, from swpc id and ssw id
     for idx, cme in swpc_cmes.iterrows():
         label = "ssw_{0:03d}_swpc_{1:03d}".format(idx, cme['event_id'])
-        path = os.path.join(proj_dirs['out_data'], label)
-        # If this directory doesnt exist, make it
-        if not os.path.exists(path):
-            os.mkdir(path)
-        else:
-            print(path + " exists already.")
+        for craft in ['sta', 'stb']:
+            path = os.path.join(proj_dirs['out_data'], label, craft)
+            # If this directory doesnt exist, make it
+            if not os.path.exists(path):
+                os.makedirs(path)
+            else:
+                print(path + " exists already.")
 
     return
 
 def make_ssw_assets():
     """
-    Function to loop over the swpc CMEs, find all relevant HI1A and HI1B 1-day background images, and produce
+    Function to loop over the SWPC CMEs, find all relevant HI1A and HI1B 1-day background images, and produce
     plain, differenced and relative difference images.
     :return:
     """
@@ -62,6 +65,66 @@ def make_ssw_assets():
         # 24hr after
         t_start = cme['t_start'] - pd.Timedelta(hours=1)
         t_stop = cme['t_start'] + pd.Timedelta(hours=24)
-        print t_start, t_stop
 
-        t_stop.strftime('%Y%m%d')
+
+        #Get event label
+        event_label = "ssw_{0:03d}_swpc_{1:03d}".format(idx, cme['event_id'])
+        print event_label
+
+        for craft in ['sta', 'stb']:
+            hi_files = hip.find_hi_files(t_start, t_stop, craft=craft, camera='hi1', background_type=1)
+
+            # Loop over the hi_files and make plain, differenced and relative difference images.
+            for file in hi_files:
+
+                hi_map = hip.hi_image_plain(file, star_suppress=False)
+                out_file = event_label + '_' + craft + '_hi1_' + hi_map.date.strftime('%Y%m%d_%H%M%S') + '_stars_yes.png'
+                path = os.path.join(proj_dirs['out_data'], event_label, craft, out_file)
+                vmin = 0
+                vmax = 0.5
+                mpimg.imsave(path, hi_map.data, vmin = vmin, vmax=vmax, cmap = 'gray')
+                # TODO: Find out why this is hanging on the second event. Is to do with the interpolation during star removal
+                hi_map = hip.hi_image_plain(file, star_suppress=True)
+                out_file = event_label + '_' + craft + '_hi1_' + hi_map.date.strftime('%Y%m%d_%H%M%S') + '_stars_no.png'
+                path = os.path.join(proj_dirs['out_data'], event_label, craft, out_file)
+                mpimg.imsave(path, hi_map.data, vmin=vmin, vmax=vmax, cmap='gray')
+
+
+            out = os.path.join(proj_dirs['out_data'], event_label, craft, 'stars_no.gif')
+            src = os.path.join(proj_dirs['out_data'], event_label, craft, '*stars_no.png')
+            pro_str = "convert -delay 0 -loop 0 -resize 50% " + src + ' ' + out
+            os.system(pro_str)
+            out = os.path.join(proj_dirs['out_data'], event_label, craft, 'stars_yes.gif')
+            src = os.path.join(proj_dirs['out_data'], event_label, craft, '*stars_yes.png')
+            pro_str = "convert -delay 0 -loop 0 -resize 50% " + src + ' ' + out
+            os.system(pro_str)
+
+
+
+
+
+def test_scaling():
+    """
+    Function to loop over the SWPC CMEs, find all relevant HI1A and HI1B 1-day background images, and produce
+    plain, differenced and relative difference images.
+    :return:
+    """
+    # Get project directories
+    t_start = pd.datetime(year=2008,month=1,day=1)
+    t_stop = t_start + pd.Timedelta(days=30)
+    hi_files = hip.find_hi_files(t_start, t_stop, craft='sta', camera='hi1', background_type=1)
+    # Loop over the hi_files and make plain, differenced and relative difference images.
+    percentiles = np.arange(90,99,0.5)
+    out_data = np.zeros((len(percentiles),len(hi_files)),dtype=float)
+    for i,file in enumerate(hi_files):
+        hi_map = hip.hi_image_plain(file, star_suppress=False)
+        out_data[:,i] = np.percentile((hi_map.data[np.isfinite(hi_map.data)]), percentiles)
+
+    plt.figure(figsize=(15,10))
+    for i in range(0,len(percentiles)):
+        plt.plot(out_data[i,:],'k-')
+
+    #TODO: label the figure up.
+    print zip(percentiles,np.median(out_data,axis=1),np.mean(out_data,axis=1))
+
+    plt.show()
