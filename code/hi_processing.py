@@ -82,27 +82,42 @@ def find_hi_files(t_start, t_stop, craft="sta", camera="hi1", background_type=1)
     return out_files
 
 
-def filter_stars(img, thresh, res=512):
+def suppress_starfield(hi_map, thresh=97.5, res=512):
     """
-    Function to supress bright stars in the HI field of view. Is purely data based and does not use star-maps. Looks for
-    large (high gradient) peaks by calculating the laplacian of the image. Then uses morphological closing to identify
+    Function to suppress bright stars in the HI field of view. Is purely data based and does not use star-maps. Looks for
+    large (high gradient) peaks by calculating the Laplacian of the image. Then uses morphological closing to identify
     the bright "tops" of stars, inside the high-gradient region. Then uses cubic interpolation (scipy.interp.bisplrep)
     to fill in pixels identified as a star. This is done in blocks over the image. This has only been developed with HI1
     data - unsure how it will behave with HI2.
     :param img: An array containing the HI image data.
-    :param thresh: Float value containing the threshold used to identify the large gradients associated with stars.
-                `  The threshold should be the chosen percentile of the brightness gradient distribution e.g. 90.
+    :param thresh: Float value containing the percentile threshold used to identify the large gradients associated with
+                   stars. This means valid thresh values must lie in range 0-100, and should normally be high. e.g. 97.5
     :param res: Int value of block size (in pixels) to iterate over the image in.
     :return out_img: Star suppressed HI image.
     """
+    # Check inputs
+    if not isinstance(thresh,(float,int)):
+        print("Error: Invalid thresh, should be float or int. Defaulting to 97.5")
+        thresh = 97.5
+    elif (thresh < 0) or (thresh > 100):
+        print("Error: thresh = {} is invalid, should be in range 0-100. Defaulting to 97.5".format(thresh))
+        thresh = 97.5
 
+    if not isinstance(res, int):
+        print("Error: Invalid res, should be an int. Defaulting to 512")
+        res = 512
+    elif (res < 0) or np.any((hi_map.data.shape < res)):
+        print("Error: Invalid res, must be greater than zero and less than any of data dimensions")
+
+    img = hi_map.data.copy()
     # Get del2 of image, to find horrendous gradients
-    del2 = ndimage.filters.laplace(img)
+    del2 = np.abs(ndimage.filters.laplace(img))
     # Find threshold of data, excluding NaNs
     thresh2 = np.percentile(del2[np.isfinite(del2)], thresh)
     abv_thresh = del2 > thresh2
     # Use binary closing to fill in big stars
-    abv_thresh = ndimage.binary_closing(abv_thresh, structure=np.ones((3, 3)))
+    # TODO: Now fixed del2, can we remove the binary closing?
+    # abv_thresh = ndimage.binary_closing(abv_thresh, structure=np.ones((3, 3)))
 
     if np.any(abv_thresh):
         star_r, star_c = np.nonzero(abv_thresh)
@@ -159,7 +174,52 @@ def filter_stars(img, thresh, res=512):
             for y, x in zip(Y, X):
                 out_img[y, x] = interp.bisplev(x, y, f)
 
-    return out_img
+    # Now make a plot to show how the intensity has changed along a given row.
+    # TODO: Make a plot demonstrating how the star suppression works.
+    # Find column with most stars.
+    #uc,count = np.unique(star_c, return_counts=True)
+    #id_sort = np.argsort(count)
+    #uc = uc[id_sort]
+    #count = count[id_sort]
+    #c = uc[-1]
+    #fig, ax = plt.subplots(3,1,figsize=(15, 12))
+    #ax = ax.ravel()
+    #ax[0].plot(img[:, c], 'k-')
+    #ax[0].plot(out_img[:, c], 'r--')
+    #get_stars = star_r[star_c == c]
+    #ax[0].plot(get_stars,np.zeros(len(get_stars)) - 0.05, 'r.')
+    #get_nostars = nostar_r[nostar_c == c]
+    #ax[0].plot(get_nostars, np.zeros(len(get_nostars)) - 0.1, 'k.')
+    #ax[1].plot(abv_thresh[:, c], 'k-')
+    #ax[2].plot(del2[:, c], 'k-')
+    #ax[2].hlines(thresh2, 0, 1023, colors='r', linestyles='-')
+    #ax[0].set_ylabel('Intensity')
+    #ax[1].set_ylabel('Abv Thresh')
+    #ax[2].set_ylabel('Del2')
+    #ax[2].set_xlabel('Row pixel')
+    #ax[1].set_xticklabels([])
+    #ax[0].set_xticklabels([])
+    #for a in ax:
+    #    a.set_xlim(0,1023)
+    #plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.975, wspace=0.1, hspace=0.02)
+    #plt.show()
+
+    #fig, ax = plt.subplots(2, 2, figsize=(15, 15))
+    #ax = ax.ravel()
+    #for c, a in zip(uc[0:4],ax):
+    #    a.plot(img[:,c],'k-')
+    #    a.plot(out_img[:,c], 'r--')
+    #    get_stars = star_r[star_c==c]
+    #    a.plot(get_stars,np.zeros(len(get_stars)) - 0.05, 'r.')
+    #    get_nostars = nostar_r[nostar_c == c]
+    #    a.plot(get_nostars, np.zeros(len(get_nostars)) - 0.1, 'k.')
+    #    a.set_xlabel('Row pixel')
+    #    a.set_ylabel('Intensity')
+    #    a.set_xlim(0,1023)
+    #plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.1, hspace=0.1)
+    #plt.show()
+    hi_map.data = out_img.copy()
+    return hi_map
 
 def get_approx_star_field(img):
     """This function returns a binary array that provides a rough estimate of the locations of stars in the HI1 fov.
@@ -170,8 +230,8 @@ def get_approx_star_field(img):
     """
     img_stars = img.copy()
     img_stars[~np.isfinite(img_stars)] = 0
-    # TODO: THERE IS SOMETHING WRONG HERE. NOT ALL SMALL VALUES SET TO ZERO.
-    img_stars[img_stars>np.percentile(img_stars,97.5)] = 1
+    img_stars[img_stars<np.percentile(img_stars,97.5)] = 0
+    img_stars[img_stars != 0] = 1
     return img_stars
 
 def align_image(src_map,dst_map):
@@ -183,6 +243,7 @@ def align_image(src_map,dst_map):
     :param dst_map: A SunPy Map of the HI image to match coordinates against
     :return out_img: Array of src_map image shifted into coordinates of dst_map
     """
+    # Note, this doesn't correctly update the header/meta information of src_map.
     MC = smap.MapCube([src_map,dst_map])
     shifts = coalign.calculate_match_template_shift(MC,layer_index=1,func=get_approx_star_field)
     xshift = (shifts['x'].to('deg') / MC[0].scale.x)
@@ -190,18 +251,75 @@ def align_image(src_map,dst_map):
     to_shift = [-yshift[0].value, -xshift[0].value]
     src_img = coalign.repair_image_nonfinite(src_map.data)
     out_img = ndimage.interpolation.shift(src_img, to_shift, mode='constant',cval=np.NaN)
-    return out_img
+    src_map.data = out_img.copy()
+    return src_map
 
-def hi_image_plain(file, star_suppress=False):
+def get_image_plain(file, star_suppress=False):
+    """
+    A function to load in a HI image file and return this as a SunPy Map object. Will optionally suppress the star field
+    using hi_processing.filter_stars().
+    :param file: String, full path to a HI image file (in fits format).
+    :param star_suppress: Bool, True or False on whether star suppression should be performed. Default false
+    :return:
+    """
+    # Check inputs.
+    if not os.path.exists(file):
+        print("Error: Path to file does not exist.")
 
     if not isinstance(star_suppress,bool):
-        print("Error: star_suppress should be true or false. Defaulting to false")
+        print("Error: star_suppress should be True or False. Defaulting to False")
         star_suppress = False
 
     hi_map = smap.Map(file)
 
     if star_suppress:
-        new_img = filter_stars(hi_map.data.copy(), 99, res=512)
-        hi_map.data = new_img
+        hi_map = suppress_starfield(hi_map)
 
     return hi_map
+
+def get_image_diff(file_c, file_p, star_suppress=False, align=True, fractional=False):
+    """
+    Function to produce a differenced image from HI data. Differenced image is calculated as Ic - Ip,
+    loaded from file_c and file_p, respectively. Will optionally perform star field suppression (via
+    hi_processing.filter_stars), and also image alignment (via hi_processing.align_image).
+    :param file_1: String, full path to file of image c.
+    :param file_2: String, full path to file of image p.
+    :param star_suppress: Bool, True or False on whether star supression should be performed. Default False
+    :param star_suppress: Bool, True or False on whether star supression should be performed. Default True
+    :param align:
+    :return:
+    """
+    if not os.path.exists(file_c):
+        print("Error: Invalid path to file_2.")
+
+    if not os.path.exists(file_p):
+        print("Error: Invalid path to file_2.")
+
+    if not isinstance(star_suppress, bool):
+        print("Error: star_suppress should be True or False. Defaulting to False")
+        star_suppress = False
+
+    if not isinstance(align, bool):
+        print("Error: align should be True or False. Defaulting to False")
+        star_suppress = True
+
+    if not isinstance(fractional, bool):
+        print("Error: fractional should be True or False. Defaulting to False")
+        fractional = False
+
+    hi_c = smap.Map(file_c)
+
+    hi_p = smap.Map(file_p)
+
+    # Align image p with image c,
+    hi_p = align_image(hi_p, hi_c)
+
+    if star_suppress:
+        hi_c = suppress_starfield(hi_c)
+        hi_p = suppress_starfield(hi_p)
+
+    if not fractional:
+        hi_c.data = hi_c.data - hi_p.data
+    elif fractional:
+        hi_c.data = (hi_c.data - hi_p.data)/hi_p.data
+

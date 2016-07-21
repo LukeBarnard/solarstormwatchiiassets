@@ -5,6 +5,7 @@ def main():
     #ap.make_output_directory_structure()
     ap.make_ssw_assets()
     #ap.test_scaling()
+    #ap.test_interpolation()
     return
 
 if __name__=='__main__':
