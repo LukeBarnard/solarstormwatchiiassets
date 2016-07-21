@@ -59,7 +59,7 @@ def make_ssw_assets():
     proj_dirs = apt.project_info()
     # Get the swpc cme database
     swpc_cmes = load_swpc_events()
-    #swpc_cmes = swpc_cmes[1:]
+
     # Loop over the swpc_cmes and estimate HI1A\B start and stop times
     for idx, cme in swpc_cmes.iterrows():
         # cmes['t_start'] gives swpc estimate time CME at 0.1 AU. Assume HI1 start is 1hr before this, and leaves HI1
@@ -72,19 +72,23 @@ def make_ssw_assets():
 
         for craft in ['sta', 'stb']:
             hi_files = hip.find_hi_files(t_start, t_stop, craft=craft, camera='hi1', background_type=1)
-            print(len(hi_files))
             # Loop over the hi_files and make plain, differenced and relative difference images.
-            for file in hi_files:
+            files_c = hi_files[1:]
+            files_p = hi_files[0:-1]
+            for fc, fp in zip(files_c, files_p):
 
-                hi_map = hip.get_image_plain(file, star_suppress=False)
-                out_file = event_label + '_' + craft + '_hi1_' + hi_map.date.strftime('%Y%m%d_%H%M%S') + '_stars_keep.png'
-                path = os.path.join(proj_dirs['out_data'], event_label, craft, out_file)
                 vmin = 0
                 vmax = 0.5
+                hi_map = hip.get_image_plain(fc, star_suppress=False)
+                out_file = event_label + '_' + craft + '_hi1_' + hi_map.date.strftime('%Y%m%d_%H%M%S') + '_norm.png'
+                path = os.path.join(proj_dirs['out_data'], event_label, craft, out_file)
                 mpimg.imsave(path, hi_map.data, vmin = vmin, vmax=vmax, cmap = 'gray')
-                # TODO: Find out why this is hanging on the second event. Is to do with the interpolation during star removal
-                hi_map = hip.get_image_plain(file, star_suppress=True)
-                out_file = event_label + '_' + craft + '_hi1_' + hi_map.date.strftime('%Y%m%d_%H%M%S') + '_stars_remove.png'
+
+                vmin = -0.5
+                vmax = 0.5
+                # TODO: What should scaling be for differenced images? What structuing element for median filter?
+                hi_map = hip.get_image_diff(fc, fp, align=True, smoothing=True)
+                out_file = event_label + '_' + craft + '_hi1_' + hi_map.date.strftime('%Y%m%d_%H%M%S') + '_diff.png'
                 path = os.path.join(proj_dirs['out_data'], event_label, craft, out_file)
                 mpimg.imsave(path, hi_map.data, vmin=vmin, vmax=vmax, cmap='gray')
 
@@ -92,7 +96,7 @@ def make_ssw_assets():
             out_dir = os.path.join(proj_dirs['out_data'], event_label, craft)
             shell_dir = os.path.join(proj_dirs['code'], 'combine_images.sh')
             sbp.call([shell_dir, out_dir], shell=True)
-        break
+
 
 def test_scaling():
     """

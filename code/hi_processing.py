@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import scipy.interpolate as interp
 import scipy.ndimage as ndimage
+import scipy.signal as signal
 import sunpy.map as smap
 import sunpy.image.coalignment as coalign
 import matplotlib.pyplot as plt
@@ -124,7 +125,7 @@ def suppress_starfield(hi_map, thresh=97.5, res=512):
         good_vals = np.isfinite(img)
         nostar_r, nostar_c = np.nonzero(np.logical_and(~abv_thresh, good_vals))
     else:
-        print('No points above threhsold')
+        print('No points above threshold')
         out_img = img.copy()
         return out_img
 
@@ -174,50 +175,7 @@ def suppress_starfield(hi_map, thresh=97.5, res=512):
             for y, x in zip(Y, X):
                 out_img[y, x] = interp.bisplev(x, y, f)
 
-    # Now make a plot to show how the intensity has changed along a given row.
     # TODO: Make a plot demonstrating how the star suppression works.
-    # Find column with most stars.
-    #uc,count = np.unique(star_c, return_counts=True)
-    #id_sort = np.argsort(count)
-    #uc = uc[id_sort]
-    #count = count[id_sort]
-    #c = uc[-1]
-    #fig, ax = plt.subplots(3,1,figsize=(15, 12))
-    #ax = ax.ravel()
-    #ax[0].plot(img[:, c], 'k-')
-    #ax[0].plot(out_img[:, c], 'r--')
-    #get_stars = star_r[star_c == c]
-    #ax[0].plot(get_stars,np.zeros(len(get_stars)) - 0.05, 'r.')
-    #get_nostars = nostar_r[nostar_c == c]
-    #ax[0].plot(get_nostars, np.zeros(len(get_nostars)) - 0.1, 'k.')
-    #ax[1].plot(abv_thresh[:, c], 'k-')
-    #ax[2].plot(del2[:, c], 'k-')
-    #ax[2].hlines(thresh2, 0, 1023, colors='r', linestyles='-')
-    #ax[0].set_ylabel('Intensity')
-    #ax[1].set_ylabel('Abv Thresh')
-    #ax[2].set_ylabel('Del2')
-    #ax[2].set_xlabel('Row pixel')
-    #ax[1].set_xticklabels([])
-    #ax[0].set_xticklabels([])
-    #for a in ax:
-    #    a.set_xlim(0,1023)
-    #plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.975, wspace=0.1, hspace=0.02)
-    #plt.show()
-
-    #fig, ax = plt.subplots(2, 2, figsize=(15, 15))
-    #ax = ax.ravel()
-    #for c, a in zip(uc[0:4],ax):
-    #    a.plot(img[:,c],'k-')
-    #    a.plot(out_img[:,c], 'r--')
-    #    get_stars = star_r[star_c==c]
-    #    a.plot(get_stars,np.zeros(len(get_stars)) - 0.05, 'r.')
-    #    get_nostars = nostar_r[nostar_c == c]
-    #    a.plot(get_nostars, np.zeros(len(get_nostars)) - 0.1, 'k.')
-    #    a.set_xlabel('Row pixel')
-    #    a.set_ylabel('Intensity')
-    #    a.set_xlim(0,1023)
-    #plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.1, hspace=0.1)
-    #plt.show()
     hi_map.data = out_img.copy()
     return hi_map
 
@@ -277,16 +235,15 @@ def get_image_plain(file, star_suppress=False):
 
     return hi_map
 
-def get_image_diff(file_c, file_p, star_suppress=False, align=True, fractional=False):
+def get_image_diff(file_c, file_p, star_suppress=False, align=True, smoothing=False):
     """
     Function to produce a differenced image from HI data. Differenced image is calculated as Ic - Ip,
     loaded from file_c and file_p, respectively. Will optionally perform star field suppression (via
     hi_processing.filter_stars), and also image alignment (via hi_processing.align_image).
     :param file_1: String, full path to file of image c.
     :param file_2: String, full path to file of image p.
-    :param star_suppress: Bool, True or False on whether star supression should be performed. Default False
-    :param star_suppress: Bool, True or False on whether star supression should be performed. Default True
-    :param align:
+    :param star_suppress: Bool, True or False on whether star suppression should be performed. Default False
+    :param align: Bool, True or False depending on whether images should be aligned before differencing
     :return:
     """
     if not os.path.exists(file_c):
@@ -303,9 +260,9 @@ def get_image_diff(file_c, file_p, star_suppress=False, align=True, fractional=F
         print("Error: align should be True or False. Defaulting to False")
         star_suppress = True
 
-    if not isinstance(fractional, bool):
-        print("Error: fractional should be True or False. Defaulting to False")
-        fractional = False
+    if not isinstance(smoothing, bool):
+        print("Error: align should be True or False. Defaulting to False")
+        smoothing = True
 
     hi_c = smap.Map(file_c)
 
@@ -318,8 +275,10 @@ def get_image_diff(file_c, file_p, star_suppress=False, align=True, fractional=F
         hi_c = suppress_starfield(hi_c)
         hi_p = suppress_starfield(hi_p)
 
-    if not fractional:
-        hi_c.data = hi_c.data - hi_p.data
-    elif fractional:
-        hi_c.data = (hi_c.data - hi_p.data)/hi_p.data
+    # Get difference image,
+    hi_c.data = hi_c.data - hi_p.data
+    # Apply some median smoothing.
+    if smoothing:
+        hi_c.data = signal.medfilt2d(hi_c.data,(5,5))
 
+    return hi_c
