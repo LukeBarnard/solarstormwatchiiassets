@@ -207,7 +207,15 @@ def align_image(src_map,dst_map):
     xshift = (shifts['x'].to('deg') / MC[0].scale.x)
     yshift = (shifts['y'].to('deg') / MC[0].scale.y)
     to_shift = [-yshift[0].value, -xshift[0].value]
-    src_img = coalign.repair_image_nonfinite(src_map.data)
+    # src_img = coalign.repair_image_nonfinite(src_map.data)
+    # coalign.repait_image_nonfinite hangs on HI images with missing blocks. No clearly better route. Replace NaNs
+    # with a ridiculous value, then mask out clearly bad values after interpolation
+
+    img_max = np.max(src_map.data[np.isfinite(src_map.data)])
+    # Get order of this max, add on 9.999*10(order+3)
+    # TODO: FIND WAY TO REPAIR IMAGE FOR INTERPOLATION, THEN MASK DODDGY VALUES. PERHAPS FILL WITH IMAGE MEDIAN, THEN
+    # TODO: ALSO SHIFT A BINARY MASK, (WITH NEAREST NEIGHBOUR? OR CUBIC). THEN MASK OUT THE REGION BASED ON BS DATA
+    src_img = src_map.data.copy()
     out_img = ndimage.interpolation.shift(src_img, to_shift, mode='constant',cval=np.NaN)
     src_map.data = out_img.copy()
     return src_map
@@ -267,6 +275,8 @@ def get_image_diff(file_c, file_p, star_suppress=False, align=True, smoothing=Fa
     hi_c = smap.Map(file_c)
 
     hi_p = smap.Map(file_p)
+
+    # TODO: Add in cadence check.
 
     # Align image p with image c,
     hi_p = align_image(hi_p, hi_c)

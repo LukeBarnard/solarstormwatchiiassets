@@ -7,6 +7,8 @@ import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import sunpy.map as smap
 import subprocess as sbp
+
+
 def load_swpc_events():
     """
     Function to load in the excel file containing the SWPC CMEs provided by Curt. Import as a pandas dataframe. There is
@@ -19,11 +21,12 @@ def load_swpc_events():
     # 	t_ace_wsa	diff	late_or_early	t_earth_si	Comment]. Get converters for making sure times ported correctly
     # Column 'diff' is awkward, as is a time delta, so handle seperately, by parsing to string first
     convert = {'t_appear': pd.to_datetime, 't_start': pd.to_datetime, 't_submission': pd.to_datetime,
-               't_ace_obs': pd.to_datetime, 't_ace_wsa': pd.to_datetime, 't_earth_si':pd.to_datetime, 'diff': str}
+               't_ace_obs': pd.to_datetime, 't_ace_wsa': pd.to_datetime, 't_earth_si': pd.to_datetime, 'diff': str}
 
     swpc_cmes = pd.read_excel(proj_dirs['swpc_data'], header=0, index_col=None, converters=convert)
     swpc_cmes['diff'] = pd.to_timedelta(swpc_cmes['diff'], unit='h')
     return swpc_cmes
+
 
 def make_output_directory_structure():
     """
@@ -34,7 +37,7 @@ def make_output_directory_structure():
     # Get project directories
     proj_dirs = apt.project_info()
     # Get the swpc cme database
-    swpc_cmes  = load_swpc_events()
+    swpc_cmes = load_swpc_events()
     # Loop over each event, and create a directory in outdata with a unique event name, from swpc id and ssw id
     for idx, cme in swpc_cmes.iterrows():
         label = "ssw_{0:03d}_swpc_{1:03d}".format(idx, cme['event_id'])
@@ -47,6 +50,7 @@ def make_output_directory_structure():
                 print(path + " exists already.")
 
     return
+
 
 def make_ssw_assets():
     """
@@ -67,25 +71,26 @@ def make_ssw_assets():
         t_start = cme['t_start'] - pd.Timedelta(hours=1)
         t_stop = cme['t_start'] + pd.Timedelta(hours=24)
 
-        #Get event label
+        # Get event label
         event_label = "ssw_{0:03d}_swpc_{1:03d}".format(idx, cme['event_id'])
-
+        print event_label
         for craft in ['sta', 'stb']:
             hi_files = hip.find_hi_files(t_start, t_stop, craft=craft, camera='hi1', background_type=1)
             # Loop over the hi_files and make plain, differenced and relative difference images.
             files_c = hi_files[1:]
             files_p = hi_files[0:-1]
             for fc, fp in zip(files_c, files_p):
-
+                print fc
                 vmin = 0
-                vmax = 0.5
+                vmax = 0.25
                 hi_map = hip.get_image_plain(fc, star_suppress=False)
                 out_file = event_label + '_' + craft + '_hi1_' + hi_map.date.strftime('%Y%m%d_%H%M%S') + '_norm.png'
                 path = os.path.join(proj_dirs['out_data'], event_label, craft, out_file)
-                mpimg.imsave(path, hi_map.data, vmin = vmin, vmax=vmax, cmap = 'gray')
+                mpimg.imsave(path, hi_map.data, vmin=vmin, vmax=vmax, cmap='gray')
 
-                vmin = -0.5
-                vmax = 0.5
+                vmin = -0.05
+                vmax = 0.05
+                # TODO: Add in check that frames are only 1 cadence apart.
                 # TODO: What should scaling be for differenced images? What structuing element for median filter?
                 hi_map = hip.get_image_diff(fc, fp, align=True, smoothing=True)
                 out_file = event_label + '_' + craft + '_hi1_' + hi_map.date.strftime('%Y%m%d_%H%M%S') + '_diff.png'
@@ -98,6 +103,13 @@ def make_ssw_assets():
             sbp.call([shell_dir, out_dir], shell=True)
 
 
+def make_manifest():
+    """
+    This function produces the manifest to serve the ssw assets.
+    :return:
+    """
+
+
 def test_scaling():
     """
     Function to loop over the SWPC CMEs, find all relevant HI1A and HI1B 1-day background images, and produce
@@ -105,24 +117,44 @@ def test_scaling():
     :return:
     """
     # Get project directories
-    t_start = pd.datetime(year=2008,month=1,day=1)
-    t_stop = t_start + pd.Timedelta(days=30)
-    hi_files = hip.find_hi_files(t_start, t_stop, craft='sta', camera='hi1', background_type=1)
-    # Loop over the hi_files and make plain, differenced and relative difference images.
-    percentiles = np.arange(90,99,0.5)
-    out_data = np.zeros((len(percentiles),len(hi_files)),dtype=float)
-    for i,file in enumerate(hi_files):
-        hi_map = hip.get_image_plain(file, star_suppress=False)
-        out_data[:,i] = np.percentile((hi_map.data[np.isfinite(hi_map.data)]), percentiles)
+    proj_dirs = apt.project_info()
 
-    plt.figure(figsize=(15,10))
-    for i in range(0,len(percentiles)):
-        plt.plot(out_data[i,:],'k-')
+    # Setup time span of HI data subset
+    t_start = pd.datetime(year=2008, month=1, day=1)
+    t_stop = t_start + pd.Timedelta(days=3)
+    # Setup a 4 panel plot, for STA and STb with Norm and Diff images.
+    fig, ax = plt.subplots(2, 2, figsize=(17, 12))
+    for i, craft in enumerate(['sta', 'stb']):
+        hi_files = hip.find_hi_files(t_start, t_stop, craft=craft, camera='hi1', background_type=1)
+        # Loop over the hi_files and make plain, differenced and relative difference images.
+        percentiles = np.array([1, 2.5, 5, 10, 90, 95, 97.5, 99])
+        norm_data = np.zeros((len(hi_files), len(percentiles)), dtype=float)*np.NaN
+        diff_data = np.zeros((len(hi_files), len(percentiles)), dtype=float)*np.NaN
+        hi_c = hi_files[1:]
+        hi_p = hi_files[0:-1]
 
-    #TODO: label the figure up.
-    print zip(percentiles,np.median(out_data,axis=1),np.mean(out_data,axis=1))
+        for j, (fc, fp) in enumerate(zip(hi_c, hi_p)):
+            hi_map = hip.get_image_plain(fc, star_suppress=False)
+            norm_data[j, :] = np.percentile((hi_map.data[np.isfinite(hi_map.data)]), percentiles)
+            hi_map = hip.get_image_diff(file_c=fc, file_p=fp, star_suppress=False, align=True, smoothing=True)
+            diff_data[j, :] = np.percentile((hi_map.data[np.isfinite(hi_map.data)]), percentiles)
 
-    plt.show()
+        ax[i, 0].plot(norm_data, '-')
+        ax[i, 0].set_ylabel('Normal Img. intensity')
+        ax[i, 1].plot(diff_data, '-')
+        ax[i, 1].set_ylabel('Diff Img. intensity')
+
+    for asub in [ax[:, 0], ax[:, 1]]:
+        ymn = np.min([a.get_ylim()[0] for a in asub])
+        ymx = np.max([a.get_ylim()[1] for a in asub])
+        for a in asub:
+            a.set_ylim(ymn, ymx)
+
+    plt.subplots_adjust(left=0.075, right=0.98, bottom=0.075, top=0.98, wspace=0.1, hspace=0.1)
+    name = os.path.join(proj_dirs['figs'], 'scaling_testing.png')
+    plt.savefig(name)
+    plt.close('all')
+
 
 def test_interpolation():
     """
@@ -131,14 +163,17 @@ def test_interpolation():
     :return:
     """
     # Get project directories
-    t_start = pd.datetime(year=2008,month=1,day=1)
+    t_start = pd.datetime(year=2008, month=1, day=1)
     t_stop = t_start + pd.Timedelta(days=1)
 
     hi_files = hip.find_hi_files(t_start, t_stop, craft='sta', camera='hi1', background_type=1)
 
     # Loop over the hi_files and make plain, differenced and relative difference images.
     hi_map = smap.Map(hi_files[0])
-    hip.filter_stars(hi_map.data, 98, res=512)
-
-
+    hip.suppress_starfield(hi_map.data)
     plt.show()
+
+def test_alignment():
+    hp = smap.Map(r"E:\STEREO\ares.nrl.navy.mil\lz\L2_1_25\b\img\hi_1\20111022\20111022_172901_14h1B.fts")
+    hc = smap.Map(r"E:\STEREO\ares.nrl.navy.mil\lz\L2_1_25\b\img\hi_1\20111022\20111022_180901_14h1B.fts")
+    hp = hip.align_image(hp, hc)
