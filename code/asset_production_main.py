@@ -7,7 +7,8 @@ def main():
     # ap.make_ssw_assets()
     # ap.test_scaling()
     # ap.test_interpolation()
-    ap.test_alignment()
+    # ap.test_alignment()
+    ap.test_diff_image()
     return
 
 if __name__ == '__main__':

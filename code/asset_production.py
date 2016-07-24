@@ -3,10 +3,11 @@ import numpy as np
 import pandas as pd
 import asset_production_tools as apt
 import hi_processing as hip
-import matplotlib.image as mpimg
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import sunpy.map as smap
 import subprocess as sbp
+import PIL.Image as Image
 
 
 def load_swpc_events():
@@ -64,6 +65,10 @@ def make_ssw_assets():
     # Get the swpc cme database
     swpc_cmes = load_swpc_events()
 
+    # TODO: Should I add this into hi_processing? what about a hip.save_img(diff=True)???
+    plain_normalise = mpl.colors.Normalize(vmin=0.0, vmax=0.5)
+    diff_normalise = mpl.colors.Normalize(vmin=-0.05, vmax=0.05)
+
     # Loop over the swpc_cmes and estimate HI1A\B start and stop times
     for idx, cme in swpc_cmes.iterrows():
         # cmes['t_start'] gives swpc estimate time CME at 0.1 AU. Assume HI1 start is 1hr before this, and leaves HI1
@@ -81,21 +86,23 @@ def make_ssw_assets():
             files_p = hi_files[0:-1]
             for fc, fp in zip(files_c, files_p):
                 print fc
-                vmin = 0
-                vmax = 0.25
-                hi_map = hip.get_image_plain(fc, star_suppress=False)
-                out_file = event_label + '_' + craft + '_hi1_' + hi_map.date.strftime('%Y%m%d_%H%M%S') + '_norm.png'
-                path = os.path.join(proj_dirs['out_data'], event_label, craft, out_file)
-                mpimg.imsave(path, hi_map.data, vmin=vmin, vmax=vmax, cmap='gray')
 
-                vmin = -0.05
-                vmax = 0.05
+                # Get Sunpy map of the image, convert to grayscale image with plain_normalise
+                hi_map = hip.get_image_plain(fc, star_suppress=False)
+                out_img = mpl.cm.gray(plain_normalise(hi_map.data), bytes=True)
+                out_img = Image.fromarray(out_img)
+                out_name = event_label + '_' + craft + '_hi1_' + hi_map.date.strftime('%Y%m%d_%H%M%S') + '_norm.png'
+                out_path = os.path.join(proj_dirs['out_data'], event_label, craft, out_name)
+                out_img.save(out_path, optimize=True)
+
                 # TODO: Add in check that frames are only 1 cadence apart.
                 # TODO: What should scaling be for differenced images? What structuing element for median filter?
                 hi_map = hip.get_image_diff(fc, fp, align=True, smoothing=True)
-                out_file = event_label + '_' + craft + '_hi1_' + hi_map.date.strftime('%Y%m%d_%H%M%S') + '_diff.png'
-                path = os.path.join(proj_dirs['out_data'], event_label, craft, out_file)
-                mpimg.imsave(path, hi_map.data, vmin=vmin, vmax=vmax, cmap='gray')
+                out_img = mpl.cm.gray(diff_normalise(hi_map.data), bytes=True)
+                out_img = Image.fromarray(out_img)
+                out_name = event_label + '_' + craft + '_hi1_' + hi_map.date.strftime('%Y%m%d_%H%M%S') + '_diff.png'
+                out_path = os.path.join(proj_dirs['out_data'], event_label, craft, out_name)
+                out_img.save(out_path, optimize=True)
 
             # Now makes gifs of each image type and join into a joint gif using a shell script for imagemagick
             out_dir = os.path.join(proj_dirs['out_data'], event_label, craft)
@@ -173,7 +180,37 @@ def test_interpolation():
     hip.suppress_starfield(hi_map.data)
     plt.show()
 
+
 def test_alignment():
+    """
+        Function to test the error handling is behaving as expected in hi_processing.align
+        :return:
+        """
     hp = smap.Map(r"E:\STEREO\ares.nrl.navy.mil\lz\L2_1_25\b\img\hi_1\20111022\20111022_172901_14h1B.fts")
     hc = smap.Map(r"E:\STEREO\ares.nrl.navy.mil\lz\L2_1_25\b\img\hi_1\20111022\20111022_180901_14h1B.fts")
     hp = hip.align_image(hp, hc)
+    print hp
+
+
+def test_diff_image():
+    """
+    Function to test the error handling is behaving as expected in hi_processing.get_image_diff
+    :return:
+    """
+    t_start = pd.datetime(year=2008, month=1, day=1)
+    t_stop = t_start + pd.Timedelta(days=1)
+
+    hi1a_files = hip.find_hi_files(t_start, t_stop, craft='sta', camera='hi1', background_type=1)
+    hi2a_files = hip.find_hi_files(t_start, t_stop, craft='sta', camera='hi2', background_type=1)
+
+    # Test cadence
+    # This should return an error message and blank frame, as files more than one cadence apart.
+    himap = hip.get_image_diff(hi1a_files[2], hi1a_files[0], star_suppress=False, align=True, smoothing=True)
+    himap.peek()
+    # Test detector match
+    # This should return an error message and blank frame, as files from different detectors.
+    hip.get_image_diff(hi1a_files[2], hi2a_files[1], star_suppress=False, align=True, smoothing=True)
+    himap = hip.get_image_diff(hi1a_files[2], hi1a_files[1], star_suppress=False, align=True, smoothing=True)
+    himap.peek()
+
+
