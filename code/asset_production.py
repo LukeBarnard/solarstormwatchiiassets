@@ -104,7 +104,7 @@ def make_ssw_assets():
                         out_img = mpl.cm.gray(diff_normalise(hi_map.data), bytes=True)
                         out_img = Image.fromarray(out_img)
 
-                    out_name = "_".join([event_label, craft, type, hi_map.date.strftime('%Y%m%d_%H%M%S'), '.jpg'])
+                    out_name = "_".join([event_label, craft, type, hi_map.date.strftime('%Y%m%d_%H%M%S')]) + '.jpg'
                     out_path = os.path.join(proj_dirs['out_data'], event_label, craft, type, out_name)
                     out_img.save(out_path, optimize=True)
 
@@ -112,10 +112,11 @@ def make_ssw_assets():
                 make_manifest(event_label, craft, type, n=3)
 
             # Now makes gifs of each image type and join into a joint gif using a shell script for imagemagick
-            norm_dir = os.path.join(proj_dirs['out_data'], event_label, craft, 'norm')
-            diff_dir = os.path.join(proj_dirs['out_data'], event_label, craft, 'diff')
-            ani_dir = os.path.join(proj_dirs['out_data'], event_label, craft, 'animations')
-            shell_dir = os.path.join(proj_dirs['code'], 'combine_images.sh')
+            # BASH needs forward slashes...
+            norm_dir = os.path.join(proj_dirs['out_data'], event_label, craft, 'norm').replace("\\","/")
+            diff_dir = os.path.join(proj_dirs['out_data'], event_label, craft, 'diff').replace("\\","/")
+            ani_dir = os.path.join(proj_dirs['out_data'], event_label, craft, 'animations').replace("\\","/")
+            shell_dir = os.path.join(proj_dirs['code'], 'combine_images.sh').replace("\\","/")
             sbp.call([shell_dir, norm_dir, diff_dir, ani_dir], shell=True)
 
 
@@ -154,8 +155,8 @@ def make_manifest(event, craft, type, n=3):
 
     # Form first part of asset name, get list of files.
     asset_name_part1 = "_".join([event, craft, type])
-    files = glob.glob( os.path.join(data_dir, '*' + type +'.jpg'))
-    # get only filename not full path
+    files = glob.glob( os.path.join(data_dir, '*' + type +'*.jpg'))
+    # get only filename not full path, exclude extension
     files = [os.path.basename(f) for f in files]
     # Make sure files are time sorted.
     files.sort()
@@ -167,9 +168,9 @@ def make_manifest(event, craft, type, n=3):
             # File names have format ssw_aaa_swpc_bbb_craft_camera_yyyymmdd_HHMMSS_type.jpg
             # Pull out the times of the first and nth file to be linked to make asset name
             i_n = i + n
-            fi = files[i].split('_')
+            fi = os.path.splitext(files[i])[0].split('_')
             ti = fi[6] + 'T' + fi[7]
-            fn = files[i_n].split('_')
+            fn = os.path.splitext(files[i_n])[0].split('_')
             tn = fn[6] + 'T' + fn[7]
             # Form full asset name
             asset_name_part2 = ti + '_' + tn
