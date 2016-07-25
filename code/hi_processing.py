@@ -313,9 +313,7 @@ def get_image_diff(file_c, file_p, star_suppress=False, align=True, smoothing=Fa
 
     img_dt = hi_c.date - hi_p.date
 
-    if np.abs((img_dt - cadence)) < cadence_tol:
-        produce_diff_flag = True
-    else:
+    if np.abs((img_dt - cadence)) > cadence_tol:
         print("Error: Differenced images time difference is {0}, while typical cadence is {1}.".format(img_dt, cadence))
         print(" Returning a blank frame")
         produce_diff_flag = False

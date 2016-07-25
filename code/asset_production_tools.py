@@ -14,7 +14,8 @@ def project_info():
         print('Error: Cannot find correct config file with project directories. Assuming typical structure')
         proj_dirs = {'data': os.path.join(os.getcwd(), 'data'), 'figs': os.path.join(os.getcwd(), 'figures'),
                      'code': os.path.join(os.getcwd(), 'code'), 'results': os.path.join(os.getcwd(), 'results'),
-                     'hi_data': os.path.join(os.getcwd(), r'STEREO\ares.nrl.navy.mil\lz\L2_1_25')}
+                     'hi_data': os.path.join(os.getcwd(), r'STEREO\ares.nrl.navy.mil\lz\L2_1_25'),
+                     'out_data': os.path.join(os.getcwd(), 'out_data')}
 
     else:
         # Open file and extract
