@@ -77,7 +77,8 @@ def find_hi_files(t_start, t_stop, craft="sta", camera="hi1", background_type=1)
         # HI files follow naming convention of yyyymmdd_hhmmss_datatag.fts. So first 15 elements give a time string.
         # TODO: Better way to pull out the timestring?
         time_tag = file_name[:15]
-        if (time_tag <= t_min) | (time_tag <= t_max):
+        # TODO:  ERROR?
+        if (time_tag >= t_min) and (time_tag <= t_max):
             out_files.append(file_path)
 
     return out_files

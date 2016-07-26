@@ -9,6 +9,7 @@ def main():
     # ap.test_interpolation()
     # ap.test_alignment()
     # ap.test_diff_image()
+    # ap.test_image_orientation()
     return
 
 if __name__ == '__main__':
