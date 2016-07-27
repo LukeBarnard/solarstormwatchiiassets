@@ -99,28 +99,25 @@ def make_ssw_assets():
 
                     if img_type == 'norm':
                         # Get Sunpy map of the image, convert to grayscale image with plain_normalise
-                        # TODO: Should flipud the image, as no origin lower option with PIL?
                         hi_map = hip.get_image_plain(fc, star_suppress=False)
                         out_img = mpl.cm.gray(plain_normalise(hi_map.data), bytes=True)
-                        out_img = Image.fromarray(out_img)
+                        # Get the image, also, flip upside down as there is no "origin=lower" option within PIL
+                        out_img = Image.fromarray(np.flipud(out_img))
                     elif img_type == 'diff':
-                        # TODO: Add in check that frames are only 1 cadence apart.
                         # TODO: What should scaling be for differenced images? What structuing element for median filter?
                         hi_map = hip.get_image_diff(fc, fp, align=True, smoothing=True)
                         out_img = mpl.cm.gray(diff_normalise(hi_map.data), bytes=True)
-                        out_img = Image.fromarray(out_img)
+                        # Get the image, also, flip upside down as there is no "origin=lower" option with PIL
+                        out_img = Image.fromarray(np.flipud(out_img))
 
                     out_name = "_".join([event_label, craft, img_type, hi_map.date.strftime('%Y%m%d_%H%M%S')]) + '.jpg'
                     out_path = os.path.join(proj_dirs['out_data'], event_label, craft, 'assets', out_name)
                     out_img.save(out_path, optimize=True)
 
             # Now create the manifest for this event/craft/type
-            # TODO: update make_manifests for new directory strucure. Link together both normal and diff images
-            # TODO: into a manifest for each event/craft.
             make_manifest(event_label, craft, img_type_list, n=3)
             # Now makes gifs of each image type and join into a joint gif using a shell script for imagemagick
             # BASH needs forward slashes...
-            # TODO: update shell script for new directory structure
             ast_dir = os.path.join(proj_dirs['out_data'], event_label, craft, 'assets').replace("\\", "/")
             ani_dir = os.path.join(proj_dirs['out_data'], event_label, craft, 'animations').replace("\\", "/")
             shell_dir = os.path.join(proj_dirs['code'], 'combine_images.sh').replace("\\", "/")
@@ -178,7 +175,7 @@ def make_manifest(event, craft, img_type, n=3):
                 i_n = i + n
                 fi = os.path.splitext(files[i])[0].split('_')
                 ti = fi[6] + 'T' + fi[7]
-                fn = os.path.splitext(files[i_n])[0].split('_')
+                fn = os.path.splitext(files[i_n-1])[0].split('_')
                 tn = fn[6] + 'T' + fn[7]
                 # Form full asset name
                 asset_name_part2 = ti + '_' + tn
@@ -308,12 +305,23 @@ def test_image_orientation():
         hi_map = hip.get_image_diff(fc, fp, star_suppress=False, align=True, smoothing=True)
         out_img = mpl.cm.gray(diff_normalise(hi_map.data), bytes=True)
         out_img = Image.fromarray(out_img)
-        out_name = os.path.splitext(os.path.basename(fc))[0] + '_diff.jpg'
+        out_name = os.path.splitext(os.path.basename(fc))[0] + '_diff_plain.jpg'
+        out_path = os.path.join(proj_dirs['figs'], 'orientation_test', out_name)
+        out_img.save(out_path, optimize=True)
+
+        out_img = mpl.cm.gray(diff_normalise(np.flipud(hi_map.data)), bytes=True)
+        out_img = Image.fromarray(out_img)
+        out_name = os.path.splitext(os.path.basename(fc))[0] + '_diff_flip.jpg'
         out_path = os.path.join(proj_dirs['figs'], 'orientation_test', out_name)
         out_img.save(out_path, optimize=True)
 
     out_dir = os.path.join(proj_dirs['figs'], 'orientation_test')
-    src = os.path.join(out_dir, "*.jpg")
-    dst = os.path.join(out_dir, "orientation_test.gif")
+    src = os.path.join(out_dir, "*diff_plain.jpg")
+    dst = os.path.join(out_dir, "orientation_test_plain.gif")
     cmd = " ".join(["convert -delay 0 -loop 0 -resize 50%",src,dst])
     os.system(cmd)
+    src = os.path.join(out_dir, "*diff_flip.jpg")
+    dst = os.path.join(out_dir, "orientation_test_flip.gif")
+    cmd = " ".join(["convert -delay 0 -loop 0 -resize 50%", src, dst])
+    os.system(cmd)
+
