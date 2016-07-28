@@ -158,6 +158,10 @@ def make_manifest(event, craft, img_type, n=3):
     manifest_path = os.path.join(data_dir, 'manifest.csv')
     with open(manifest_path, 'w') as manifest:
 
+        # Add in manifest header:
+        manifest.write("subject_id,subject_name,img_type,asset_0,asset_1,asset_2\n")
+
+        sub_id = 0
         # Loop over the img_types, add in manifest files for each
         for img in img_type:
             # Form first part of asset name, get list of files.
@@ -180,12 +184,13 @@ def make_manifest(event, craft, img_type, n=3):
                 # Form full asset name
                 asset_name_part2 = ti + '_' + tn
                 asset_name_full = "_".join([asset_name_part1,asset_name_part2])
-                manifest_elements =[asset_name_full]
+                manifest_elements =[str(sub_id), asset_name_full, img]
                 # Add on the subset of files
                 manifest_elements.extend(files[i: i_n])
                 # Write out as comma sep list.
                 manifest.write(",".join(manifest_elements) + "\n")
                 i = i_n
+                sub_id += 1
                 # TODO: Add in check to make sure all files are processed? Or add in staement to say which files werent?
 
 
